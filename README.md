@@ -64,47 +64,8 @@ Getting Started
 Prerequisites
 Docker
 
-Docker Compose
 
-1. Setup
-Clone the repository and navigate to the project root.
-
-Bash
-
-git clone https://your-repo-url/FastBnB.git
-cd FastBnB
-2. Run the Database Migration
-This project uses Alembic for database migrations. Before the first run, you must generate the migration for the status column in the Property model.
-
-Note: You only need to do this once.
-
-Bash
-
-# 1. Start the main database (db)
-docker-compose up -d db
-
-# 2. Run the Alembic autogenerate command inside a temporary 'backend' container
-docker-compose run --rm backend alembic revision --autogenerate -m "add property status column"
-
-# 3. Manually edit the new migration file
-(You have already done this. The fixed file 6230c22a42b2_...py is now part of the repo).
-
-3. Run the Application
-Launch all services using Docker Compose.
-
-Bash
-
-# Build the images and start all containers in detached mode
-docker-compose up --build -d
-The application is now running:
-
-Backend Service: http://localhost:8000
-
-Booking Service: http://localhost:8001
-
-pgAdmin: http://localhost:5050
-
-4. API Documentation (Swagger UI)
+API Documentation (Swagger UI)
 You can interact with both services via their automatically generated Swagger documentation:
 
 Backend (Users & Properties): http://localhost:8000/docs
