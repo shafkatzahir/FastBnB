@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+alembic
+psycopg2-binary
+pydantic
+pydantic-settings
+python-jose[cryptography] # For JWT
+passlib[bcrypt] # For password hashing
+redis # Python client for Redis
+python-multipart # For form data/file uploads
+httpx
+spglib
+the-new-hotness
+aiokafka
