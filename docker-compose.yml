@@ -1,20 +1,21 @@
-
-
 services:
   backend:
-    build: ./backend  # <-- UPDATED: Build context is now ./backend
+    build: ./backend
     container_name: fastapi_backend
     volumes:
-      - ./backend:/app  # <-- UPDATED: Mount the backend directory
+      - ./backend:/app
     restart: always
     env_file:
-      - ./backend/.env  # <-- UPDATED: Path to env file
+      - ./backend/.env
     ports:
       - "8000:8000"
     depends_on:
-      - db
-      - redis
-      - kafka  # <-- NEW: Depends on Kafka
+      db:
+        condition: service_healthy  # <-- CHANGED
+      redis:
+        condition: service_healthy  # <-- CHANGED
+      kafka:
+        condition: service_healthy  # <-- CHANGED
     networks:
       - mynetwork
 
@@ -32,8 +33,11 @@ services:
     networks:
       - mynetwork
     restart: always
-
-
+    healthcheck:  # <-- NEW: Waits for Postgres to be ready
+      test: ["CMD-SHELL", "pg_isready -U postgres -d FastBnB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   pgadmin:
     container_name: pgadmin4_container
@@ -60,20 +64,27 @@ services:
       - "6379:6379"
     networks:
       - mynetwork
+    healthcheck:  # <-- NEW: Waits for Redis to be ready
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # --- Booking Service ---
   booking_service:
-    build: ./booking-service  # <-- UPDATED: Build context
+    build: ./booking-service
     container_name: booking_service
     volumes:
-      - ./booking-service:/app  # <-- UPDATED: Mount
+      - ./booking-service:/app
     ports:
       - "8001:8001"
     env_file:
-      - ./booking-service/.env  # <-- UPDATED: Path to env file
+      - ./booking-service/.env
     depends_on:
-      - booking_db
-      - kafka  # <-- NEW: Depends on Kafka
+      booking_db:
+        condition: service_healthy  # <-- CHANGED
+      kafka:
+        condition: service_healthy  # <-- CHANGED
     networks:
       - mynetwork
     restart: always
@@ -92,8 +103,13 @@ services:
     networks:
       - mynetwork
     restart: always
+    healthcheck:  # <-- NEW: Waits for Postgres to be ready
+      test: ["CMD-SHELL", "pg_isready -U postgres -d booking_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # --- NEW: Kafka and Zookeeper ---
+  # --- Kafka and Zookeeper ---
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: zookeeper
@@ -102,6 +118,11 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:  # <-- NEW: Waits for Zookeeper to be ready
+      test: ['CMD', 'nc', '-z', 'localhost', '2181']
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
@@ -111,7 +132,8 @@ services:
     ports:
       - "9092:9092"
     depends_on:
-      - zookeeper
+      zookeeper:  # <-- CHANGED
+        condition: service_healthy
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -120,14 +142,17 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    healthcheck:  # <-- NEW: Waits for Kafka itself to be ready
+      test: ['CMD', 'nc', '-z', 'localhost', '9092']
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:
   pgadmin_data:
   booking_data:
 
-
 networks:
   mynetwork:
     driver: bridge
-
