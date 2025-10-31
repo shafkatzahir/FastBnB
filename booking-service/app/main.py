@@ -1,54 +1,73 @@
+import asyncio
+import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
+
 from . import models
 from .database import engine
 from .routers import booking_router
-import asyncio
-from contextlib import asynccontextmanager
+from .outbox_poller import run_outbox_poller
+from .booking_scheduler import run_booking_scheduler
 
-# --- NEW IMPORTS ---
-from .outbox_poller import run_outbox_poller, logger
+# Setup logger
+logger = logging.getLogger("booking_service")
 
-# Create database tables (including the new outbox_events table)
-# This runs on startup because it's at the module level
+# Create database tables on startup
+# This will create both 'bookings' and 'outbox_events' if they don't exist
 models.Base.metadata.create_all(bind=engine)
 
 
-# --- NEW: Lifespan Manager ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Handles application startup and shutdown events.
+    Manages application startup and shutdown events.
     """
-    logger.info("Booking Service starting up...")
+    logger.info("Starting background tasks...")
 
     # Start the outbox poller as a background task
     poller_task = asyncio.create_task(run_outbox_poller())
 
+    # Start the booking scheduler as a background task
+    scheduler_task = asyncio.create_task(run_booking_scheduler())
+
     yield  # The application is now running
 
     # --- Code to run on shutdown ---
-    logger.info("Booking Service shutting down...")
-    poller_task.cancel()  # Request cancellation of the poller
+    logger.info("Shutting down background tasks...")
+
+    # Cancel both tasks
+    poller_task.cancel()
+    scheduler_task.cancel()
+
+    # Await their cancellation to allow for graceful shutdown
     try:
-        await poller_task  # Wait for the poller to shut down gracefully
+        await poller_task
     except asyncio.CancelledError:
-        logger.info("Outbox poller successfully cancelled.")
+        logger.info("Outbox poller task successfully cancelled.")
+    except Exception as e:
+        logger.error(f"Error during outbox poller shutdown: {e}")
+
+    try:
+        await scheduler_task
+    except asyncio.CancelledError:
+        logger.info("Booking scheduler task successfully cancelled.")
+    except Exception as e:
+        logger.error(f"Error during booking scheduler shutdown: {e}")
 
 
-# Pass the lifespan manager to the FastAPI app
+# Create the FastAPI app instance, passing the lifespan manager
 app = FastAPI(
     title="Booking Service API",
     description="Handles property bookings.",
     version="1.0.0",
-    lifespan=lifespan  # <-- Attach the lifespan here
+    lifespan=lifespan  # Use the new lifespan manager
 )
 
-# --- REMOVE OLD LIFECYCLE EVENTS ---
-# The @app.on_event("startup") and @app.on_event("shutdown") are now gone.
-
+# Include the API routes from booking_router.py
 app.include_router(booking_router.router)
 
 
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the Booking Service"}
+

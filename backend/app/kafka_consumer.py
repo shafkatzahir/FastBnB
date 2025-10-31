@@ -3,7 +3,10 @@ import logging
 import asyncio
 from aiokafka import AIOKafkaConsumer
 from sqlalchemy.orm import Session
-from .database import SessionLocal
+from redis import Redis  # <-- NEW IMPORT
+
+# Import the main session factory AND the redis_pool
+from .database import SessionLocal, redis_pool  # <-- UPDATED IMPORT
 from .config import settings
 from . import crud, models
 
@@ -19,12 +22,22 @@ async def consume_property_updates():
         settings.KAFKA_PROPERTY_TOPIC,
         bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
         group_id="property_status_updater_group",
-        auto_offset_reset="earliest"  # Start from beginning if consumer is new
+        auto_offset_reset="earliest"
     )
 
     logger.info("Starting Kafka consumer...")
     await consumer.start()
     logger.info("Kafka consumer started. Listening for messages...")
+
+    # --- NEW: Manually create a Redis client from the pool ---
+    # We can't use FastAPI's 'Depends' here, so we create it manually.
+    redis_client: Redis | None = None
+    try:
+        redis_client = Redis(connection_pool=redis_pool)
+        redis_client.ping()
+        logger.info("Kafka consumer connected to Redis.")
+    except Exception as e:
+        logger.error(f"Kafka consumer FAILED to connect to Redis: {e}. Cache invalidation will be skipped.")
 
     try:
         async for msg in consumer:
@@ -51,8 +64,21 @@ async def consume_property_updates():
                         property_id=property_id,
                         status=status_enum
                     )
+
                     if success:
                         logger.info(f"Successfully updated property {property_id} to {status}")
+
+                        # --- THIS IS THE FIX ---
+                        # If the DB update worked, invalidate the cache.
+                        if redis_client:
+                            try:
+                                redis_client.delete(f"property_{property_id}")  # Delete specific property cache
+                                redis_client.delete("all_properties")  # Delete the main list cache
+                                logger.info(f"Invalidated Redis cache for property {property_id} and all_properties.")
+                            except Exception as e:
+                                logger.error(f"Failed to invalidate Redis cache: {e}")
+                        # --- END OF FIX ---
+
                     else:
                         logger.warning(f"Property {property_id} not found for update.")
                 finally:
@@ -65,3 +91,5 @@ async def consume_property_updates():
     finally:
         logger.info("Stopping Kafka consumer...")
         await consumer.stop()
+        if redis_client:
+            redis_client.close()  # Clean up the Redis client
