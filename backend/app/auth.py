@@ -3,6 +3,7 @@ from typing import Optional
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
+from passlib.exc import UnknownHashError
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -21,7 +22,16 @@ def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    """
+        Verifies a plain password against a hash, gracefully handling errors.
+        """
+    # --- THIS IS THE FIX ---
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except (UnknownHashError, ValueError):
+        # Catch errors for invalid hash formats or malformed hashes
+        return False
+    # --- END OF FIX ---
 
 # --- JWT Token Management ---
 def create_access_token(data: dict) -> str:

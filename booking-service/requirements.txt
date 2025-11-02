@@ -6,3 +6,7 @@ pydantic-settings
 python-jose[cryptography]
 httpx
 aiokafka  # Kafka client
+
+pytest
+pytest-mock
+httpx

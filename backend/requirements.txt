@@ -13,3 +13,7 @@ httpx
 spglib
 the-new-hotness
 aiokafka
+
+pytest
+pytest-mock
+httpx

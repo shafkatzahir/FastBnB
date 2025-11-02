@@ -10,7 +10,7 @@ logger = logging.getLogger("booking_service")  # Use the main service logger
 
 # --- THIS IS THE FIX FOR TESTING ---
 # Set to 60 seconds for testing. Change back to 3600 (1 hour) for production.
-POLL_INTERVAL_SECONDS = 60
+POLL_INTERVAL_SECONDS = 3600
 
 
 async def check_and_update_expired_bookings(db: Session):

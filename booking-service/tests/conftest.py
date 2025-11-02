@@ -40,19 +40,13 @@ def db_session():
 
 # --- Mocking External Services ---
 @pytest.fixture(scope="function", autouse=True)
-def mock_kafka_connection(mocker):
-    """Mocks the Kafka connection startup/shutdown events."""
-    # Patch the functions called during app startup/shutdown
-    mocker.patch("app.kafka_producer.connect_to_kafka", new_callable=AsyncMock)
-    mocker.patch("app.kafka_producer.close_kafka_connection", new_callable=AsyncMock)
-
-@pytest.fixture(scope="function")
-def mock_kafka_producer(mocker):
-    """Mocks the send_property_update function and returns the mock."""
-    # Patch the function that actually sends the Kafka message
-    mock_send = mocker.patch("app.kafka_producer.send_property_update", new_callable=AsyncMock)
-    # Return the mock object so tests can make assertions on it
-    return mock_send
+def mock_background_tasks(mocker):
+    """
+    Mocks the background tasks (poller and scheduler) that run on app lifespan.
+    """
+    # Patch the functions that are started in main.py
+    mocker.patch("app.main.run_outbox_poller", new_callable=AsyncMock)
+    mocker.patch("app.main.run_booking_scheduler", new_callable=AsyncMock)
 
 # --- API Test Client Fixture ---
 @pytest.fixture(scope="function")
