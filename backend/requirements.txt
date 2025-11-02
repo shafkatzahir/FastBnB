@@ -17,3 +17,5 @@ aiokafka
 pytest
 pytest-mock
 httpx
+
+bcrypt==3.2.2

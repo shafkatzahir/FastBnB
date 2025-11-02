@@ -64,9 +64,16 @@ def db_session():
 
 # --- API Test Client Fixture ---
 @pytest.fixture(scope="function")
-def client(db_session):
+def client(db_session,mocker):
     """Provides a FastAPI TestClient configured for testing."""
     # This fixture depends on the `db_session` fixture above
+
+    # --- THIS IS THE KAFKA FIX ---
+    # Patch the consumer *before* the TestClient is created.
+    # This prevents the lifespan manager from starting the real consumer.
+    mocker.patch("app.main.consume_property_updates", new_callable=AsyncMock)
+
+    # --- END OF FIX ---
 
     def override_get_db():
         """Dependency override for get_db."""
