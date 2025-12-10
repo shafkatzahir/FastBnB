@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Response, Cookie
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Cookie,Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from typing import Annotated, Optional
@@ -9,8 +9,14 @@ from .. import schemas, crud, auth, models
 from ..auth import create_refresh_token
 from ..database import get_db
 from ..config import settings
+from fastapi_limiter.depends import RateLimiter
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+# --- NEW: Key function for IP limiting ---
+async def get_client_ip(request: Request) -> str:
+    return request.client.host
+# --- END NEW ---
 
 def hash_refresh_token(token: str) -> str:
     return bcrypt.hashpw(token.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -21,7 +27,8 @@ def verify_refresh_token(plain_token: str, hashed_token: str) -> bool:
 
 
 @router.post("/register", response_model=schemas.UserRead, status_code=status.HTTP_201_CREATED)
-def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+def register_user(user: schemas.UserCreate, db: Session = Depends(get_db),
+                  limit: None = Depends(RateLimiter(times=10, hours=1, identifier=get_client_ip))):
     db_user = crud.get_user_by_username(db, username=user.username)
     if db_user:
         raise HTTPException(status_code=400, detail="Username already registered")
@@ -31,7 +38,8 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
 def login_for_access_token(
     response: Response,
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    limit: None = Depends(RateLimiter(times=20, minutes=1, identifier=get_client_ip))
 ):
     user = crud.get_user_by_username(db, username=form_data.username)
     if not user or not auth.verify_password(form_data.password, user.hashed_password):

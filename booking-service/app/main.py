@@ -9,6 +9,10 @@ from .routers import booking_router
 from .outbox_poller import run_outbox_poller
 from .booking_scheduler import run_booking_scheduler
 
+import redis.asyncio as redis
+from fastapi_limiter import FastAPILimiter
+from .config import settings
+
 # Setup logger
 logger = logging.getLogger("booking_service")
 
@@ -24,6 +28,15 @@ async def lifespan(app: FastAPI):
     """
     logger.info("Starting background tasks...")
 
+    # --- NEW: Initialize Redis and FastAPILimiter ---
+    try:
+        redis_client = redis.from_url(settings.REDIS_URL, encoding="utf-8")
+        await FastAPILimiter.init(redis_client)
+        logger.info("FastAPILimiter initialized with Redis.")
+    except Exception as e:
+        logger.error(f"Failed to initialize FastAPILimiter: {e}")
+    # --- END NEW ---
+
     # Start the outbox poller as a background task
     poller_task = asyncio.create_task(run_outbox_poller())
 
@@ -34,6 +47,10 @@ async def lifespan(app: FastAPI):
 
     # --- Code to run on shutdown ---
     logger.info("Shutting down background tasks...")
+
+    # --- NEW: Close Redis connection ---
+    await redis_client.close()
+    # --- END NEW ---
 
     # Cancel both tasks
     poller_task.cancel()

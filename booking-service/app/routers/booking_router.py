@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status,Request
 from sqlalchemy.orm import Session
 from typing import List, Annotated
 from jose import jwt, JWTError
@@ -9,12 +9,35 @@ from .. import schemas, crud
 from ..database import get_db
 from ..config import settings
 
-# --- DELETE THIS IMPORT ---
-# from ..kafka_producer import send_property_update
+from fastapi_limiter.depends import RateLimiter
+
+
 
 router = APIRouter(prefix="/bookings", tags=["Bookings"])
 
 api_key_header = APIKeyHeader(name="Authorization")
+
+
+async def get_key_by_user_id_or_ip(request: Request) -> str:
+    """
+    Tries to get the user ID from the JWT token.
+    If it fails (no token, invalid token), it falls back to the client's IP.
+    """
+    try:
+        token = request.headers.get("Authorization")
+        scheme, jwt_token = token.split()
+        if scheme.lower() != "bearer":
+            return request.client.host  # Fallback to IP
+
+        payload = jwt.decode(jwt_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        user_id = payload.get("sub")
+
+        if user_id:
+            return str(user_id)
+    except (JWTError, ValueError, AttributeError, TypeError):
+        # If token is invalid, missing, or malformed, limit by IP
+        pass
+    return request.client.host
 
 
 async def get_current_user_id_from_token(
@@ -45,7 +68,8 @@ async def get_current_user_id_from_token(
 async def create_booking(
         booking: schemas.BookingCreate,
         user_id: Annotated[int, Depends(get_current_user_id_from_token)],
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        limit: None = Depends(RateLimiter(times=30, minutes=1, identifier=get_key_by_user_id_or_ip))
 ):
     """
     Create a new booking for the authenticated user.
@@ -88,7 +112,8 @@ def read_user_bookings(
         user_id: Annotated[int, Depends(get_current_user_id_from_token)],
         db: Session = Depends(get_db),
         skip: int = 0,
-        limit: int = 100
+        limit: int = 100,
+        limit2: None = Depends(RateLimiter(times=5, minutes=1, identifier=get_key_by_user_id_or_ip))
 ):
     """
     Get all bookings for the authenticated user.

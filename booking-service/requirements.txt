@@ -10,3 +10,6 @@ aiokafka  # Kafka client
 pytest
 pytest-mock
 httpx
+
+fastapi-limiter
+redis>=4.2.0

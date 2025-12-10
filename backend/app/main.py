@@ -7,6 +7,10 @@ from .kafka_consumer import consume_property_updates
 import logging
 from contextlib import asynccontextmanager
 
+import redis.asyncio as redis
+from fastapi_limiter import FastAPILimiter
+from .config import settings
+
 # Set up a logger
 logger = logging.getLogger("backend_main")
 
@@ -22,6 +26,16 @@ async def lifespan(app: FastAPI):
     """
     logger.info("Backend Service starting up...")
 
+    # --- NEW: Initialize Redis and FastAPILimiter ---
+    try:
+        redis_client = redis.from_url(settings.REDIS_URL, encoding="utf-8")
+        await FastAPILimiter.init(redis_client)
+        logger.info("FastAPILimiter initialized with Redis.")
+    except Exception as e:
+        logger.error(f"Failed to initialize FastAPILimiter: {e}")
+        # Depending on policy, you might want to exit if limiter fails
+    # --- END NEW ---
+
     # Start the Kafka consumer in the background
     consumer_task = asyncio.create_task(consume_property_updates())
 
@@ -30,6 +44,10 @@ async def lifespan(app: FastAPI):
     # --- Code to run on shutdown ---
     logger.info("Backend Service shutting down...")
     consumer_task.cancel()  # Request cancellation of the consumer
+
+    # --- NEW: Close Redis connection ---
+    await redis_client.close()
+    # --- END NEW ---
     try:
         await consumer_task  # Wait for it to shut down
     except asyncio.CancelledError:

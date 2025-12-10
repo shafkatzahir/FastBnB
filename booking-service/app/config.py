@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     KAFKA_BOOTSTRAP_SERVERS: str = "kafka:9092"
     KAFKA_PROPERTY_TOPIC: str = "property_updates"
 
+    REDIS_URL: str
+
     model_config = SettingsConfigDict(env_file="../.env")
 
 

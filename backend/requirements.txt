@@ -7,7 +7,7 @@ pydantic
 pydantic-settings
 python-jose[cryptography] # For JWT
 passlib[bcrypt] # For password hashing
-redis # Python client for Redis
+#redis # Python client for Redis
 python-multipart # For form data/file uploads
 httpx
 spglib
@@ -19,3 +19,6 @@ pytest-mock
 httpx
 
 bcrypt==3.2.2
+
+fastapi-limiter
+redis>=4.2.0
